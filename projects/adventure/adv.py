@@ -35,13 +35,16 @@ class Graph():
         self.vertices = {0: {'n': '?', 's': '?', 'w': '?', 'e': '?'}}
 
     def add_vertex(self, vertex):
-        self.vertices[vertex] = {}
+        if vertex in self.vertices:
+            return
+        else:
+            self.vertices[vertex] = {}
 
     def add_edge(self, v1, v2):
         self.vertices[v1].add(v2)
 
     def get_neighbors(self, vertex):
-        return [id for id in self.vertices[vertex].values() if id != '?']
+        return [id for id in self.vertices[vertex].values()]
 
 
 class Stack():
@@ -72,33 +75,61 @@ class Queue():
         return len(self.queue)
 
 
-def graph_room(room, exits, exit=None, prev_room=None):
-
-    opposite = {
-        'n': 's',
-        's': 'n',
-        'e': 'w',
-        'w': 'e'
-    }
-
-    graph.add_vertex(room)
-
-    for exit in exits:
-        graph.vertices[room][exit] = '?'
-
-    if prev_room is not None:
-        graph.add_vertex(prev_room)
-        graph.vertices[room][opposite[exit]] = prev_room
-        graph.vertices[prev_room][exit] = room
-
-
 graph = Graph()
 
+back_path = []
 
-def bfs(starting_vertex, visited):
+reverse = {
+    'n': 's',
+    's': 'n',
+    'e': 'w',
+    'w': 'e'
+}
+
+
+def graph_rooms(prev_room, prev_exits, direction):
+
+    # if room exists, assign exit
+    if player.current_room.id in graph.vertices:
+        for exit in player.current_room.get_exits():
+            if reverse[direction] == exit:
+                graph.vertices[player.current_room.id][reverse[exit]] = prev_room
+    else:
+        # if room does not exit, create and assign exits
+        graph.add_vertex(player.current_room.id)
+
+        for exit in player.current_room.get_exits():
+            if reverse[direction] == exit:
+                graph.vertices[player.current_room.id][exit] = prev_room
+            else:
+                graph.vertices[player.current_room.id][exit] = '?'
+
+    # assign last used exit to previous room
+    for exit in prev_exits:
+        if exit == direction:
+            graph.vertices[prev_room][exit] = player.current_room.id
+
+
+def get_unexplored(unexplored):
+
+    for exit in player.current_room.get_exits():
+        if graph.vertices[player.current_room.id][exit] == '?':
+            unexplored.append(exit)
+
+    return unexplored
+
+
+def travel(direction):
+    player.travel(direction)
+    traversal_path.append(direction)
+
+
+def bfs(starting_vertex):
     q = Queue()
-    q.enqueue(graph.get_neighbors(starting_vertex))
-
+    q.enqueue([id for id in graph.get_neighbors(
+        starting_vertex)])
+    # create list for visited nodes
+    visited = {}
     # while queue is not empty:
     while q.size() > 0:
         # pop the path from the queue
@@ -106,9 +137,9 @@ def bfs(starting_vertex, visited):
         # get the last node from the path
         node = list(path)[-1]
 
-        print("")
+        if node == '?':
+            path.pop()
 
-        if '?' in path:
             return [starting_vertex, *path]
 
         if node not in visited:
@@ -117,57 +148,62 @@ def bfs(starting_vertex, visited):
                 new_path.append(adjacent)
                 q.enqueue(new_path)
 
-        visited[node] = {}
+        visited[node] = graph.vertices[node]
 
 
-visited = {}
+def dft():
+    while len(graph.vertices) < len(world.rooms):
+        # get the player's current room
+        prev_room = player.current_room.id
 
-s = Stack()
+        # get exits
+        exits = player.current_room.get_exits()
 
-s.push(player.current_room.id)
+        # get unexplored exits
+        unexplored = []
 
-prev_room = None
+        get_unexplored(unexplored)
 
-while s.size() > 0:
-    # grab room to explore
-    current_room = s.pop()
+        if len(unexplored) > 0:
+            # choose random direction
+            direction = random.choice(unexplored)
 
-    exits = player.current_room.get_exits()
-    graph_room(current_room, exits)
+            # travel
+            travel(direction)
+            back_path.append(reverse[direction])
+            print("GRAPH:", graph.vertices)
 
-    if current_room not in visited:
-        unexplored_exits = []
+        else:
+            # go back until unexplored room found
+            while len(unexplored) == 0:
+                # BFS
+                directions = bfs(player.current_room.id)
 
-        print("EXITS:", exits)
+                path_back = []
+                print(directions)
+                print("CURRENT ROOM:", player.current_room.id)
 
-        for exit in exits:
-            unexplored_exits.append(exit)
+                # TODO: convert BFS
 
-        print("UNEXPLORED EXITS:", unexplored_exits)
+                for i in range(0, len(directions) - 1):
+                    for direction in reverse:
+                        curr = directions[i]
+                        nxt = directions[i + 1]
 
-        if len(unexplored_exits) > 0:
-            exit = random.choice(unexplored_exits)
+                        if direction in graph.vertices[curr].keys() and graph.vertices[curr][direction] == nxt:
+                            path_back.append(direction)
+                            print("PATH BACK:", path_back)
 
-        # if current room has not been visited before, add to visited
-        visited[current_room] = {}
+                if len(path_back) > 0:
+                    for step in path_back:
+                        player.travel(step)
+                        get_unexplored(unexplored)
 
-        player.travel(exit)
-        traversal_path.append(exit)
-        prev_room = current_room
-        graph_room(player.current_room.id, exits, exit, prev_room)
-        s.push(player.current_room.id)
-
-    if s.size() <= 1:
-        # bfs for last room with a '?'
-        print("PATH BACK:", bfs(current_room, visited))
+        # graph rooms
+        graph_rooms(prev_room, exits, direction)
 
 
-print("CURRENT ROOM:", player.current_room)
-print("VISITED:", visited)
-print("PREV ROOM:", prev_room)
-print("STACK:", s.stack)
-print("TRAVERSAL PATH:", traversal_path)
-print("GRAPH:", graph.vertices)
+dft()
 
 
 # TRAVERSAL TEST
