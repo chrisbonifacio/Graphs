@@ -32,30 +32,16 @@ traversal_path = []
 
 class Graph():
     def __init__(self):
-        self.vertices = {0: {'n': '?', 's': '?', 'w': '?', 'e': '?'}}
+        self.vertices = {}
 
     def add_vertex(self, vertex):
-        self.vertices[vertex] = {}
+        if vertex in self.vertices:
+            return
+        else:
+            self.vertices[vertex] = {}
 
     def add_edge(self, v1, v2):
         self.vertices[v1].add(v2)
-
-    def get_neighbors(self, vertex):
-        return [id for id in self.vertices[vertex].values() if id != '?']
-
-
-class Stack():
-    def __init__(self):
-        self.stack = []
-
-    def push(self, value):
-        self.stack.append(value)
-
-    def pop(self):
-        return self.stack.pop()
-
-    def size(self):
-        return len(self.stack)
 
 
 class Queue():
@@ -72,102 +58,100 @@ class Queue():
         return len(self.queue)
 
 
-def graph_room(room, exits, exit=None, prev_room=None):
-
-    opposite = {
-        'n': 's',
-        's': 'n',
-        'e': 'w',
-        'w': 'e'
-    }
-
-    graph.add_vertex(room)
-
-    for exit in exits:
-        graph.vertices[room][exit] = '?'
-
-    if prev_room is not None:
-        graph.add_vertex(prev_room)
-        graph.vertices[room][opposite[exit]] = prev_room
-        graph.vertices[prev_room][exit] = room
-
-
 graph = Graph()
 
-
-def bfs(starting_vertex, visited):
-    q = Queue()
-    q.enqueue(graph.get_neighbors(starting_vertex))
-
-    # while queue is not empty:
-    while q.size() > 0:
-        # pop the path from the queue
-        path = q.dequeue()
-        # get the last node from the path
-        node = list(path)[-1]
-
-        print("")
-
-        if '?' in path:
-            return [starting_vertex, *path]
-
-        if node not in visited:
-            for adjacent in graph.get_neighbors(node):
-                new_path = list(path)
-                new_path.append(adjacent)
-                q.enqueue(new_path)
-
-        visited[node] = {}
+reverse = {
+    'n': 's',
+    's': 'n',
+    'e': 'w',
+    'w': 'e'
+}
 
 
-visited = {}
+def graph_rooms(prev_room, next_room, direction):
+    graph.vertices[prev_room][direction] = next_room
 
-s = Stack()
+    if not next_room in graph.vertices:
+        graph.vertices[next_room] = {}
+        for e in player.current_room.get_exits():
+            graph.vertices[next_room][e] = '?'
 
-s.push(player.current_room.id)
-
-prev_room = None
-
-while s.size() > 0:
-    # grab room to explore
-    current_room = s.pop()
-
-    exits = player.current_room.get_exits()
-    graph_room(current_room, exits)
-
-    if current_room not in visited:
-        unexplored_exits = []
-
-        print("EXITS:", exits)
-
-        for exit in exits:
-            unexplored_exits.append(exit)
-
-        print("UNEXPLORED EXITS:", unexplored_exits)
-
-        if len(unexplored_exits) > 0:
-            exit = random.choice(unexplored_exits)
-
-        # if current room has not been visited before, add to visited
-        visited[current_room] = {}
-
-        player.travel(exit)
-        traversal_path.append(exit)
-        prev_room = current_room
-        graph_room(player.current_room.id, exits, exit, prev_room)
-        s.push(player.current_room.id)
-
-    if s.size() <= 1:
-        # bfs for last room with a '?'
-        print("PATH BACK:", bfs(current_room, visited))
+    graph.vertices[next_room][reverse[direction]] = prev_room
 
 
-print("CURRENT ROOM:", player.current_room)
-print("VISITED:", visited)
-print("PREV ROOM:", prev_room)
-print("STACK:", s.stack)
-print("TRAVERSAL PATH:", traversal_path)
-print("GRAPH:", graph.vertices)
+def get_unexplored(room):
+    for exit in room:
+        if room[exit] == '?':
+            return exit
+    return None
+
+
+def travel(direction):
+    curr = player.current_room.id
+
+    player.travel(direction)
+
+    nxt = player.current_room.id
+
+    print(f"moving {direction} {curr} --> {nxt}")
+
+    # add move to traversal path
+    traversal_path.append(direction)
+
+    # graph rooms
+    graph_rooms(curr, nxt, direction)
+
+
+def dft():
+    graph.vertices[player.current_room.id] = {}
+
+    for exit in player.current_room.get_exits():
+        graph.vertices[player.current_room.id][exit] = '?'
+
+    while len(graph.vertices) < len(world.rooms):
+        curr_room = player.current_room.id
+        # check for unexplored exits
+        if '?' in graph.vertices[player.current_room.id].values():
+            direction = get_unexplored(graph.vertices[player.current_room.id])
+            # travel
+            travel(direction)
+
+        else:
+            # BFS
+            q = Queue()
+            q.enqueue([curr_room])
+            # create list for visited nodes
+            visited = set()
+            # while queue is not empty:
+            while q.size() > 0:
+                # pop the path from the queue
+                path = q.dequeue()
+
+                # get the last node from the path
+                room = path[-1]
+
+                direction = get_unexplored(graph.vertices[room])
+
+                if direction is not None:
+                    # convert BFS rooms to directions
+                    for i in range(0, len(path) - 1):
+                        curr = path[i]
+                        nxt = path[i + 1]
+
+                        for direction in graph.vertices[curr]:
+                            if graph.vertices[curr][direction] == nxt:
+                                travel(direction)
+                    break
+
+                if room not in visited:
+                    visited.add(room)
+                    for exit in graph.vertices[room]:
+                        new_path = path.copy()
+                        new_path.append(graph.vertices[room][exit])
+                        q.enqueue(new_path)
+
+
+dft()
 
 
 # TRAVERSAL TEST
